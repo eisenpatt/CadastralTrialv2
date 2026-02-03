@@ -172,6 +172,7 @@ function drawLayer() {
       const lotVal = Number(f.properties.Lot_Value || 0);
       const balance = lotVal - paidAmt;
 
+      // ONLY the download link, no image
       const receiptURL = f.properties.Receipt || '';
 
       l.bindPopup(`
