@@ -35,6 +35,13 @@ body { margin:0; font-family: Arial, sans-serif; }
   margin-top:4px;
   font-weight:bold;
 }
+
+.popup-image {
+  max-width:200px;
+  max-height:200px;
+  display:block;
+  margin-top:5px;
+}
 </style>
 </head>
 
@@ -189,7 +196,10 @@ function drawLayer() {
         <b>Balance:</b> ₱${balance.toLocaleString()}<br>
         <b>Data Encoder:</b> ${f.properties.Data_Encoder || ''}<br>
         <b>Last Updated:</b> ${f.properties.Timestamp ? new Date(f.properties.Timestamp).toLocaleString() : ''}<br>
-        ${receiptURL ? `<a href="${receiptURL}" target="_blank">Download Receipt</a>` : ''}
+        ${receiptURL ? `
+          <img class="popup-image" src="${receiptURL}" alt="Receipt"/><br>
+          <a href="${receiptURL}" target="_blank">Download Receipt</a>
+        ` : ''}
       `);
     }
   }).addTo(map);
