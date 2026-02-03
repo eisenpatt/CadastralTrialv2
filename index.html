@@ -100,8 +100,14 @@ function loadData() {
         .then(r=>r.json())
         .then(gj=>{
           gj.features.forEach(f=>{
-            let row = latest[f.properties.PIN];
-            if(row) Object.assign(f.properties,row);
+            const pin = f.properties.PIN;
+            const row = latest[pin];
+            if(row){
+              // Merge all Sheet fields into GeoJSON properties
+              for(const key in row){
+                f.properties[key] = row[key];
+              }
+            }
           });
           geojsonData = gj;
           populateFilters();
@@ -139,8 +145,8 @@ function drawLayer() {
 
   parcelLayer = L.geoJSON(geojsonData,{
     filter: f => {
-      let paidAmt = Number(f.properties.Amount_Paid || 0);
-      let lotVal = Number(f.properties.Lot_Value || 0);
+      const paidAmt = Number(f.properties.Amount_Paid || 0);
+      const lotVal = Number(f.properties.Lot_Value || 0);
       let status = "unpaid";
 
       if(paidAmt >= lotVal && lotVal>0) status="full";
@@ -149,7 +155,7 @@ function drawLayer() {
       f.properties._paymentStatus = status;
 
       // Barangay summary
-      let b = f.properties.Barangay_Code || "Unknown";
+      const b = f.properties.Barangay_Code || "Unknown";
       if(!barangayCounts[b]) barangayCounts[b]={full:0,partial:0,unpaid:0};
       barangayCounts[b][status]++;
 
@@ -157,37 +163,37 @@ function drawLayer() {
       return false;
     },
     style: f => {
-      let status = f.properties._paymentStatus;
+      const status = f.properties._paymentStatus;
       if(status==="full") return {color:"#006400", fillColor:"#00cc44", weight:1, fillOpacity:0.6};
       if(status==="partial") return {color:"#CCCC00", fillColor:"#FFFF66", weight:1, fillOpacity:0.6};
       return {color:"#8b0000", fillColor:"#ff3333", weight:1, fillOpacity:0.6};
     },
     onEachFeature: (f,l) => {
-      let paidAmt = Number(f.properties.Amount_Paid || 0);
-      let lotVal = Number(f.properties.Lot_Value || 0);
-      let balance = lotVal - paidAmt;
+      const paidAmt = Number(f.properties.Amount_Paid || 0);
+      const lotVal = Number(f.properties.Lot_Value || 0);
+      const balance = lotVal - paidAmt;
 
       l.bindPopup(`
-        <b>PIN:</b> ${f.properties.PIN}<br>
-        <b>Parcel ID:</b> ${f.properties.Parcel_ID}<br>
-        <b>Cadastral Lot No:</b> ${f.properties.Cadastral_Lot_No}<br>
-        <b>Owner:</b> ${f.properties.Lot_Owner}<br>
-        <b>Title:</b> ${f.properties.Title}<br>
-        <b>Area (sq.m.):</b> ${f.properties.Area}<br>
-        <b>Classification:</b> ${f.properties.Classification_Code}<br>
-        <b>Improvements:</b> ${f.properties.Improvements}<br>
-        <b>Land Value Code:</b> ${f.properties.Land_Value_Code}<br>
+        <b>PIN:</b> ${f.properties.PIN || ''}<br>
+        <b>Parcel ID:</b> ${f.properties.Parcel_ID || ''}<br>
+        <b>Cadastral Lot No:</b> ${f.properties.Cadastral_Lot_No || ''}<br>
+        <b>Owner:</b> ${f.properties.Lot_Owner || ''}<br>
+        <b>Title:</b> ${f.properties.Title || ''}<br>
+        <b>Area (sq.m.):</b> ${f.properties.Area || ''}<br>
+        <b>Classification:</b> ${f.properties.Classification_Code || ''}<br>
+        <b>Improvements:</b> ${f.properties.Improvements || ''}<br>
+        <b>Land Value Code:</b> ${f.properties.Land_Value_Code || ''}<br>
         <b>Lot Value:</b> ₱${lotVal.toLocaleString()}<br>
         <b>Amount Paid:</b> ₱${paidAmt.toLocaleString()}<br>
         <b>Balance:</b> ₱${balance.toLocaleString()}<br>
-        <b>Last Updated:</b> ${new Date(f.properties.Timestamp).toLocaleString()}
+        <b>Last Updated:</b> ${f.properties.Timestamp ? new Date(f.properties.Timestamp).toLocaleString() : ''}
       `);
     }
   }).addTo(map);
 
   // Counters
   geojsonData.features.forEach(f=>{
-    switch(f.properties._paymentStatus) {
+    switch(f.properties._paymentStatus){
       case "full": paid++; break;
       case "partial": partial++; break;
       case "unpaid": unpaid++; break;
@@ -200,8 +206,8 @@ function drawLayer() {
 
   // Barangay summary
   let summaryHTML = "<b>Barangay Summary</b><br>";
-  for(let b in barangayCounts){
-    let c = barangayCounts[b];
+  for(const b in barangayCounts){
+    const c = barangayCounts[b];
     summaryHTML += `${b}: 🟢${c.full} 🟡${c.partial} 🔴${c.unpaid}<br>`;
   }
   document.getElementById("barangaySummary").innerHTML = summaryHTML;
