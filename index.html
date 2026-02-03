@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="utf-8">
-<title>LGU Cadastral Payment Dashboard</title>
+<title>LGU Cadastral + Payment Dashboard</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
@@ -16,7 +16,7 @@ body { margin:0; font-family: Arial, sans-serif; }
   position:absolute;
   top:10px;
   left:10px;
-  width:350px;
+  width:360px;
   background:white;
   padding:10px;
   z-index:1000;
@@ -41,14 +41,23 @@ body { margin:0; font-family: Arial, sans-serif; }
 <body>
 
 <div class="panel">
-  <h3>Payment Filters</h3>
+  <h3>Filters</h3>
   <select id="PaymentStatusFilter">
-    <option value="">All Parcels</option>
+    <option value="">All Payment Status</option>
     <option value="full">Fully Paid</option>
     <option value="partial">Partial Payment</option>
     <option value="unpaid">Unpaid</option>
   </select>
 
+  <select id="Province_Code"></select>
+  <select id="Municipality_Code"></select>
+  <select id="Barangay_Code"></select>
+  <select id="Section"></select>
+  <select id="Classification_Code"></select>
+  <select id="Improvements"></select>
+  <select id="Land_Value_Code"></select>
+
+  <hr>
   <div class="counter" id="paidCount"></div>
   <div class="counter" id="partialCount"></div>
   <div class="counter" id="unpaidCount"></div>
@@ -59,18 +68,17 @@ body { margin:0; font-family: Arial, sans-serif; }
 <div id="map"></div>
 
 <script>
-// ================= CONFIG =================
+// CONFIG
 const geojsonURL = "cadastralv4.geojson";
 const csvURL = "https://docs.google.com/spreadsheets/d/1z22DepDiHcjD4A_XgYy_Cb4Dw9mCmXhk8lcl71tMgEI/export?format=csv";
 
-// ================= MAP =================
 let map = L.map("map").setView([12.8797,121.7740],6);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
 
 let parcelLayer;
 let geojsonData;
 
-// ================= LOAD DATA =================
+// LOAD DATA
 loadData();
 
 function loadData() {
@@ -96,13 +104,31 @@ function loadData() {
             if(row) Object.assign(f.properties,row);
           });
           geojsonData = gj;
+          populateFilters();
           drawLayer();
         });
     }
   });
 }
 
-// ================= DRAW LAYER =================
+// FILTERS
+const filterFields = ["Province_Code","Municipality_Code","Barangay_Code","Section",
+                      "Classification_Code","Improvements","Land_Value_Code"];
+
+function populateFilters() {
+  filterFields.forEach(f=>{
+    let sel = document.getElementById(f);
+    sel.innerHTML = `<option value="">All ${f}</option>`;
+    [...new Set(geojsonData.features.map(x=>x.properties[f]).filter(Boolean))]
+      .sort()
+      .forEach(v=> sel.innerHTML += `<option>${v}</option>`);
+    sel.onchange = drawLayer;
+  });
+}
+
+document.getElementById("PaymentStatusFilter").onchange = drawLayer;
+
+// DRAW MAP
 function drawLayer() {
   if(parcelLayer) map.removeLayer(parcelLayer);
 
@@ -111,12 +137,12 @@ function drawLayer() {
   let paid=0, partial=0, unpaid=0;
   let barangayCounts = {};
 
-  parcelLayer = L.geoJSON(geojsonData, {
+  parcelLayer = L.geoJSON(geojsonData,{
     filter: f => {
       let paidAmt = Number(f.properties.Amount_Paid || 0);
       let lotVal = Number(f.properties.Lot_Value || 0);
-
       let status = "unpaid";
+
       if(paidAmt >= lotVal && lotVal>0) status="full";
       else if(paidAmt>0 && paidAmt<lotVal) status="partial";
 
@@ -144,6 +170,13 @@ function drawLayer() {
       l.bindPopup(`
         <b>PIN:</b> ${f.properties.PIN}<br>
         <b>Parcel ID:</b> ${f.properties.Parcel_ID}<br>
+        <b>Cadastral Lot No:</b> ${f.properties.Cadastral_Lot_No}<br>
+        <b>Owner:</b> ${f.properties.Lot_Owner}<br>
+        <b>Title:</b> ${f.properties.Title}<br>
+        <b>Area (sq.m.):</b> ${f.properties.Area}<br>
+        <b>Classification:</b> ${f.properties.Classification_Code}<br>
+        <b>Improvements:</b> ${f.properties.Improvements}<br>
+        <b>Land Value Code:</b> ${f.properties.Land_Value_Code}<br>
         <b>Lot Value:</b> ₱${lotVal.toLocaleString()}<br>
         <b>Amount Paid:</b> ₱${paidAmt.toLocaleString()}<br>
         <b>Balance:</b> ₱${balance.toLocaleString()}<br>
@@ -152,7 +185,7 @@ function drawLayer() {
     }
   }).addTo(map);
 
-  // Update counters
+  // Counters
   geojsonData.features.forEach(f=>{
     switch(f.properties._paymentStatus) {
       case "full": paid++; break;
@@ -167,15 +200,12 @@ function drawLayer() {
 
   // Barangay summary
   let summaryHTML = "<b>Barangay Summary</b><br>";
-  for(let b in barangayCounts) {
+  for(let b in barangayCounts){
     let c = barangayCounts[b];
     summaryHTML += `${b}: 🟢${c.full} 🟡${c.partial} 🔴${c.unpaid}<br>`;
   }
   document.getElementById("barangaySummary").innerHTML = summaryHTML;
 }
-
-// ================= FILTER EVENT =================
-document.getElementById("PaymentStatusFilter").onchange = drawLayer;
 </script>
 
 </body>
