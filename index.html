@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>LGU Cadastral Monitoring Dashboard</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+
+<style>
+body { margin:0; font-family: Arial, sans-serif; }
+#map { height:100vh; }
+
+.panel {
+  position:absolute;
+  top:10px;
+  left:10px;
+  width:340px;
+  background:white;
+  padding:10px;
+  z-index:1000;
+  border-radius:6px;
+  box-shadow:0 0 6px rgba(0,0,0,0.3);
+  font-size:12px;
+}
+
+.panel select {
+  width:100%;
+  padding:4px;
+  margin-bottom:4px;
+}
+
+.counter {
+  margin-top:4px;
+  font-weight:bold;
+}
+</style>
+</head>
+
+<body>
+
+<div class="panel">
+  <h3>Parcel Filters</h3>
+
+  <select id="Province_Code"></select>
+  <select id="Municipality_Code"></select>
+  <select id="Barangay_Code"></select>
+  <select id="Section"></select>
+  <select id="Classification_Code"></select>
+  <select id="Improvements"></select>
+  <select id="Land_Value_Code"></select>
+
+  <div class="counter" id="countTotal"></div>
+  <div class="counter" id="countBreakdown"></div>
+</div>
+
+<div id="map"></div>
+
+<script>
+// ================= CONFIG =================
+const geojsonURL = "cadastralv4.geojson";
+const csvURL = "https://docs.google.com/spreadsheets/d/1z22DepDiHcjD4A_XgYy_Cb4Dw9mCmXhk8lcl71tMgEI/export?format=csv";
+
+// ================= MAP =================
+let map = L.map("map").setView([12.8797,121.7740],6);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+
+let parcelLayer;
+let geojsonData;
+
+// ================= LOAD DATA =================
+loadData();
+
+function loadData() {
+  Papa.parse(csvURL, {
+    download:true,
+    header:true,
+    skipEmptyLines:true,
+    complete: res => {
+
+      // 🔑 Latest record per PIN
+      let latest = {};
+      res.data.forEach(r=>{
+        if (!r.PIN || !r.Timestamp) return;
+        let ts = new Date(r.Timestamp);
+        if (!latest[r.PIN] || ts > new Date(latest[r.PIN].Timestamp)) {
+          latest[r.PIN] = r;
+        }
+      });
+
+      fetch(geojsonURL)
+        .then(r=>r.json())
+        .then(gj=>{
+          gj.features.forEach(f=>{
+            let row = latest[f.properties.PIN];
+            if (row) Object.assign(f.properties, row);
+          });
+          geojsonData = gj;
+          populateFilters();
+          drawLayer();
+        });
+    }
+  });
+}
+
+// ================= FILTERS =================
+const filterFields = [
+  "Province_Code","Municipality_Code","Barangay_Code","Section",
+  "Classification_Code","Improvements","Land_Value_Code"
+];
+
+function populateFilters() {
+  filterFields.forEach(f=>{
+    let sel = document.getElementById(f);
+    sel.innerHTML = `<option value="">All ${f}</option>`;
+    [...new Set(geojsonData.features.map(x=>x.properties[f]).filter(Boolean))]
+      .sort()
+      .forEach(v=> sel.innerHTML += `<option>${v}</option>`);
+    sel.onchange = drawLayer;
+  });
+}
+
+// ================= DRAW MAP =================
+function drawLayer() {
+  if (parcelLayer) map.removeLayer(parcelLayer);
+
+  let counts = {};
+  let visible = geojsonData.features.filter(f=>{
+    return filterFields.every(fl=>{
+      let v = document.getElementById(fl).value;
+      return !v || f.properties[fl] === v;
+    });
+  });
+
+  // tally by Classification_Code
+  visible.forEach(f=>{
+    let k = f.properties.Classification_Code || "Unclassified";
+    counts[k] = (counts[k]||0)+1;
+  });
+
+  document.getElementById("countTotal").innerHTML =
+    `Visible Parcels: ${visible.length}`;
+
+  document.getElementById("countBreakdown").innerHTML =
+    Object.entries(counts)
+      .map(([k,v])=>`${k}: ${v}`)
+      .join("<br>");
+
+  parcelLayer = L.geoJSON(visible,{
+    style:{color:"#004d00",weight:1,fillOpacity:0.4},
+    onEachFeature:(f,l)=>{
+      l.bindPopup(`
+        <b>PIN:</b> ${f.properties.PIN}<br>
+        <b>Parcel ID:</b> ${f.properties.Parcel_ID}<br>
+        <b>Cadastral Lot No:</b> ${f.properties.Cadastral_Lot_No}<br>
+        <b>Owner:</b> ${f.properties.Lot_Owner}<br>
+        <b>Title:</b> ${f.properties.Title}<br>
+        <b>Area (sq.m.):</b> ${f.properties.Area}<br>
+        <b>Classification:</b> ${f.properties.Classification_Code}<br>
+        <b>Improvements:</b> ${f.properties.Improvements}<br>
+        <b>Land Value Code:</b> ${f.properties.Land_Value_Code}<br>
+        <b>Last Updated:</b> ${new Date(f.properties.Timestamp).toLocaleString()}
+      `);
+    }
+  }).addTo(map);
+}
+</script>
+
+</body>
+</html>
